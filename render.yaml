@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: dataanalyst-app
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: gemini_api
+        sync: false
+      - key: OCR_API_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: horizon_api
+        sync: false
+      - key: gemini_api_2
+        sync: false

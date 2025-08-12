@@ -1255,9 +1255,13 @@ async def aianalyst(request: Request):
         task_breaked = gemini_response["candidates"][0]["content"]["parts"][0]["text"]
     except Exception as e:
         task_breaked = f"1. Read question (Task breaker fallback due to error: {e})"  # fallback minimal content
-    with open("/tmp/broken_down_tasks.txt", "w", encoding="utf-8") as f:
+    
+    # Use cross-platform temporary directory
+    temp_dir = tempfile.gettempdir()
+    broken_tasks_path = os.path.join(temp_dir, "broken_down_tasks.txt")
+    with open(broken_tasks_path, "w", encoding="utf-8") as f:
         f.write(str(task_breaked))
-    created_files.add(os.path.normpath("/tmp/broken_down_tasks.txt"))
+    created_files.add(os.path.normpath(broken_tasks_path))
 
     # Proceed with remaining steps (CSV/HTML/JSON processing, source extraction, etc.)
     # ----------------------------------------------------------------------
