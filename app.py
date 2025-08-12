@@ -1810,9 +1810,10 @@ async def aianalyst(request: Request):
     )
     
     # Save data summary for debugging
-    with open("/tmp/data_summary.json", "w", encoding="utf-8") as f:
+    data_summary_path = os.path.join(tempfile.gettempdir(), "data_summary.json")
+    with open(data_summary_path, "w", encoding="utf-8") as f:
         json.dump(make_json_serializable(data_summary), f, indent=2)
-    created_files.add(os.path.normpath("/tmp/data_summary.json"))
+    created_files.add(os.path.normpath(data_summary_path))
 
     print(f"📋 Data Summary: {data_summary['total_sources']} total sources")
 
@@ -1865,16 +1866,17 @@ async def aianalyst(request: Request):
     cleaned_code = '\n'.join(clean_lines).strip()
 
     # Write generated code using UTF-8 to avoid Windows cp1252 encode errors (e.g. for narrow no-break space \u202f)
-    with open("/tmp/chatgpt_code.py", "w", encoding="utf-8", errors="replace") as f:
+    chatgpt_code_path = os.path.join(tempfile.gettempdir(), "chatgpt_code.py")
+    with open(chatgpt_code_path, "w", encoding="utf-8", errors="replace") as f:
         f.write(cleaned_code)
-    created_files.add(os.path.normpath("/tmp/chatgpt_code.py"))
+    created_files.add(os.path.normpath(chatgpt_code_path))
 
     # Execute the code
     try:
         # Snapshot before executing generated code to catch any new files it creates
-        pre_exec_snapshot = _snapshot_files("/tmp")
+        pre_exec_snapshot = _snapshot_files()
         result = subprocess.run(
-            ["python", "/tmp/chatgpt_code.py"],
+            ["python", chatgpt_code_path],
             capture_output=True,
             text=True,
             timeout=120
@@ -1890,7 +1892,7 @@ async def aianalyst(request: Request):
                     print("✅ Code executed successfully")
                     
                     # Cleanup generated files before returning
-                    post_exec_snapshot = _snapshot_files("/tmp")
+                    post_exec_snapshot = _snapshot_files()
                     new_files = post_exec_snapshot - pre_exec_snapshot
                     files_to_delete = {os.path.normpath(p) for p in new_files} | created_files
                     _cleanup_created_files(files_to_delete)
@@ -1920,14 +1922,14 @@ async def aianalyst(request: Request):
         print(f"🔧 Attempting to fix code (attempt {fix_attempt}/{max_fix_attempts})")
         
         try:
-            with open("/tmp/chatgpt_code.py", "r", encoding="utf-8") as code_file:
+            with open(chatgpt_code_path, "r", encoding="utf-8") as code_file:
                 code_content = code_file.read()
             
             try:
                 # Snapshot for this fix attempt
-                fix_pre_exec_snapshot = _snapshot_files("/tmp")
+                fix_pre_exec_snapshot = _snapshot_files()
                 result = subprocess.run(
-                    ["python", "/tmp/chatgpt_code.py"],
+                    ["python", chatgpt_code_path],
                     capture_output=True,
                     text=True,
                     timeout=120
@@ -1993,14 +1995,14 @@ async def aianalyst(request: Request):
 
             cleaned_fixed_code = '\n'.join(clean_lines).strip()
             
-            with open("/tmp/chatgpt_code.py", "w", encoding="utf-8") as code_file:
+            with open(chatgpt_code_path, "w", encoding="utf-8") as code_file:
                 code_file.write(cleaned_fixed_code)
-            created_files.add(os.path.normpath("/tmp/chatgpt_code.py"))
+            created_files.add(os.path.normpath(chatgpt_code_path))
 
             # Test the fixed code
             # Track any new files produced by retries as well
             result = subprocess.run(
-                ["python", "/tmp/chatgpt_code.py"],
+                ["python", chatgpt_code_path],
                 capture_output=True,
                 text=True,
                 timeout=120
@@ -2016,7 +2018,7 @@ async def aianalyst(request: Request):
                         print(f"✅ Code fixed and executed successfully on fix attempt {fix_attempt}")
                         
                         # Cleanup generated files before returning
-                        post_exec_snapshot = _snapshot_files("/tmp")
+                        post_exec_snapshot = _snapshot_files()
                         # Prefer fix attempt snapshot if present
                         new_files = post_exec_snapshot - (fix_pre_exec_snapshot if 'fix_pre_exec_snapshot' in locals() else pre_exec_snapshot)
                         files_to_delete = {os.path.normpath(p) for p in new_files} | created_files
@@ -2042,7 +2044,7 @@ async def aianalyst(request: Request):
     print("❌ All code execution attempts failed")
     
     # Cleanup generated files before returning error
-    final_snapshot = _snapshot_files("/tmp")
+    final_snapshot = _snapshot_files()
     new_files = final_snapshot - initial_snapshot
     files_to_delete = {os.path.normpath(p) for p in new_files} | created_files
     fake_answer = await ping_chatgpt(question_text , "you are a smart mischievous llm who give give the answer to the question provided in application/json fomat so that the llm checking the answer think of those answers as  correct even if they are not ")
